@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Admin Dashboard</title>
+
+<link rel="stylesheet" href="../style.css">
+
+<style>
+
+body{
+    background:#f5f5f5;
+    font-family:Arial, Helvetica, sans-serif;
+}
+
+.dashboard{
+    width:95%;
+    margin:120px auto;
+}
+
+.dashboard h1{
+    text-align:center;
+    color:#00695c;
+    margin-bottom:30px;
+}
+
+.dashboard-section{
+    margin-bottom:60px;
+}
+
+.dashboard-section h2{
+    text-align:center;
+    color:#00695c;
+    margin-bottom:25px;
+}
+
+/* TABLE */
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    background:white;
+    box-shadow:0 8px 20px rgba(0,0,0,.15);
+}
+
+th{
+    background:#00695c;
+    color:white;
+    padding:15px;
+}
+
+td{
+    padding:15px;
+    border-bottom:1px solid #ddd;
+    text-align:center;
+}
+
+tr:hover{
+    background:#f8f8f8;
+}
+
+/* BUTTONS */
+
+button{
+    padding:8px 15px;
+    border:none;
+    border-radius:5px;
+    cursor:pointer;
+}
+
+.edit{
+    background:orange;
+    color:white;
+}
+
+.delete{
+    background:red;
+    color:white;
+}
+
+.publish{
+    background:#00695c;
+    color:white;
+}
+
+/* ADVERTISEMENT FORM */
+
+.ad-form{
+    background:white;
+    padding:30px;
+    border-radius:15px;
+    box-shadow:0 8px 20px rgba(0,0,0,.15);
+    max-width:900px;
+    margin:0 auto 40px;
+}
+
+.ad-form label{
+    display:block;
+    font-weight:bold;
+    margin-top:15px;
+    margin-bottom:6px;
+    color:#333;
+}
+
+.ad-form input,
+.ad-form textarea,
+.ad-form select{
+    width:100%;
+    padding:12px;
+    border:1px solid #ccc;
+    border-radius:6px;
+    font-size:16px;
+}
+
+.ad-form textarea{
+    min-height:120px;
+    resize:vertical;
+}
+
+.ad-form button{
+    margin-top:20px;
+    background:#ff9800;
+    color:white;
+    padding:12px 25px;
+    font-size:16px;
+}
+
+.ad-form button:hover{
+    background:#e68900;
+}
+
+/* DATE FIELDS */
+
+.date-fields{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+}
+
+/* ADVERTISEMENT TABLE */
+
+.ad-image{
+    width:100px;
+    height:100px;
+    object-fit:cover;
+    border-radius:8px;
+}
+
+.video-preview{
+    width:120px;
+    height:80px;
+}
+
+/* MOBILE */
+
+@media(max-width:768px){
+
+    .dashboard{
+        width:98%;
+    }
+
+    .date-fields{
+        grid-template-columns:1fr;
+    }
+
+    table{
+        font-size:12px;
+    }
+
+    th,
+    td{
+        padding:8px;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="dashboard">
+
+<h1>DARIUS DEEDEA TOUR GUIDE</h1>
+
+
+<!-- =====================================================
+     BOOKINGS
+===================================================== -->
+
+<div class="dashboard-section">
+
+<h2>Bookings Dashboard</h2>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>ID</th>
+<th>Name</th>
+<th>Phone</th>
+<th>Destination</th>
+<th>Date</th>
+<th>Guests</th>
+<th>Status</th>
+<th>Actions</th>
+
+</tr>
+
+</thead>
+
+<tbody id="bookingTable">
+
+</tbody>
+
+</table>
+
+</div>
+
+
+<!-- =====================================================
+     ADVERTISEMENT MANAGEMENT
+===================================================== -->
+<div class="dashboard-section">
+
+<h2>Advertisement Management</h2>
+
+
+<!-- ==========================
+     ADD ADVERTISEMENT FORM
+     SUPERADMIN ONLY
+=========================== -->
+
+<div class="ad-form" id="advertisementFormSection">
+
+<h3>Add New Advertisement / Event</h3>
+
+<form id="advertisementForm"
+      enctype="multipart/form-data">
+
+
+<label>
+Advertisement Title
+</label>
+
+<input
+    type="text"
+    name="title"
+    placeholder="Example: Luxury Yacht Experience"
+    required
+>
+
+
+<label>
+Description
+</label>
+
+<textarea
+    name="description"
+    placeholder="Enter advertisement description..."
+    required
+></textarea>
+
+
+<label>
+Price
+</label>
+
+<input
+    type="text"
+    name="price"
+    placeholder="Example: KSh 1,200 / Hour"
+>
+
+
+<label>
+Photo or Video
+</label>
+
+<input
+    type="file"
+    name="media"
+    accept="image/*,video/*"
+    required
+>
+
+
+<label>
+Advertisement Type
+</label>
+
+<select
+    name="advertisement_type"
+    id="advertisementType"
+    required
+>
+
+<option value="">
+Select Advertisement Type
+</option>
+
+<option value="permanent">
+Permanent Advertisement
+</option>
+
+<option value="duration">
+Duration Advertisement / Event
+</option>
+
+</select>
+
+
+<!-- DATE AND TIME -->
+
+<div class="date-fields">
+
+<div>
+
+<label>
+Start Date & Time
+</label>
+
+<input
+    type="datetime-local"
+    name="start_datetime"
+    id="startDate"
+>
+
+</div>
+
+
+<div>
+
+<label>
+End Date & Time
+</label>
+
+<input
+    type="datetime-local"
+    name="end_datetime"
+    id="endDate"
+>
+
+</div>
+
+</div>
+
+
+<button
+    type="submit"
+    class="publish"
+>
+
+Publish Advertisement
+
+</button>
+
+</form>
+
+</div>
+
+
+<!-- ==========================
+     ADVERTISEMENT LIST
+=========================== -->
+
+<h3 style="margin-bottom:20px;">
+Published Advertisements
+</h3>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>ID</th>
+<th>Media</th>
+<th>Title</th>
+<th>Description</th>
+<th>Price</th>
+<th>Type</th>
+<th>Start</th>
+<th>End</th>
+<th>Status</th>
+<th>Action</th>
+
+</tr>
+
+</thead>
+
+<tbody id="advertisementTable">
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+
+<!-- =====================================================
+     JAVASCRIPT
+===================================================== -->
+
+<script>
+// =====================================================
+// CHECK ADMIN PERMISSION
+// =====================================================
+
+fetch("/current-admin")
+
+.then(response => {
+
+    if (!response.ok) {
+
+        window.location.href = "/admin-login.html";
+
+        throw new Error("Admin not logged in");
+
+    }
+
+    return response.json();
+
+})
+
+.then(admin => {
+
+    const formSection =
+        document.getElementById("advertisementFormSection");
+
+
+    // =================================================
+    // ONLY SUPERADMIN CAN SEE ADD ADVERTISEMENT FORM
+    // =================================================
+
+    if (admin.role !== "superadmin") {
+
+        formSection.style.display = "none";
+
+    }
+
+})
+
+.catch(error => {
+
+    console.log(error);
+
+});
+
+// =====================================================
+// LOAD BOOKINGS
+// =====================================================
+
+fetch("/bookings")
+
+.then(response => response.json())
+
+.then(data => {
+
+let table = "";
+
+data.forEach(booking => {
+
+table += `
+
+<tr>
+
+<td>${booking.id}</td>
+
+<td>${booking.fullname}</td>
+
+<td>${booking.phone}</td>
+
+<td>${booking.destination}</td>
+
+<td>${booking.travelDate}</td>
+
+<td>${booking.guests}</td>
+
+<td>Pending</td>
+
+<td>
+
+<button class="edit">
+Approve
+</button>
+
+<button class="delete">
+Delete
+</button>
+
+</td>
+
+</tr>
+
+`;
+
+});
+
+document.getElementById("bookingTable").innerHTML = table;
+
+})
+
+.catch(error => {
+
+console.error("Booking error:", error);
+
+});
+
+
+
+// =====================================================
+// ADVERTISEMENT TYPE
+// =====================================================
+
+const advertisementType =
+document.getElementById("advertisementType");
+
+const startDate =
+document.getElementById("startDate");
+
+const endDate =
+document.getElementById("endDate");
+
+
+advertisementType.addEventListener("change", function(){
+
+if(this.value === "permanent"){
+
+    startDate.value = "";
+    endDate.value = "";
+
+    startDate.disabled = true;
+    endDate.disabled = true;
+
+}
+
+else if(this.value === "duration"){
+
+    startDate.disabled = false;
+    endDate.disabled = false;
+
+    startDate.required = true;
+    endDate.required = true;
+
+}
+
+});
+
+
+
+// =====================================================
+// SUBMIT ADVERTISEMENT
+// =====================================================
+
+document
+.getElementById("advertisementForm")
+.addEventListener("submit", function(event){
+
+event.preventDefault();
+
+
+const formData = new FormData(this);
+
+
+fetch("/advertisements", {
+
+    method:"POST",
+
+    body:formData
+
+})
+
+.then(response => response.json())
+
+.then(data => {
+
+    if(data.success){
+
+        alert("Advertisement published successfully!");
+
+        document
+        .getElementById("advertisementForm")
+        .reset();
+
+        startDate.disabled = false;
+        endDate.disabled = false;
+
+        loadAdvertisements();
+
+    }
+
+    else{
+
+        alert(
+            data.message ||
+            "Failed to publish advertisement."
+        );
+
+    }
+
+})
+
+.catch(error => {
+
+    console.error(error);
+
+    alert(
+        "Error publishing advertisement."
+    );
+
+});
+
+});
+
+
+
+// =====================================================
+// LOAD ADVERTISEMENTS
+// =====================================================
+
+function loadAdvertisements(){
+
+fetch("/advertisements")
+
+.then(response => response.json())
+
+.then(data => {
+
+let table = "";
+
+
+data.forEach(ad => {
+
+
+let media = "";
+
+
+if(
+    ad.media_type &&
+    ad.media_type.startsWith("video")
+){
+
+media = `
+
+<video
+    class="video-preview"
+    controls
+>
+
+<source
+    src="${ad.media}"
+    type="${ad.media_type}"
+>
+
+</video>
+
+`;
+
+}
+
+else{
+
+media = `
+
+<img
+    src="${ad.media}"
+    class="ad-image"
+    alt="${ad.title}"
+>
+
+`;
+
+}
+
+
+table += `
+
+<tr>
+
+<td>${ad.id}</td>
+
+<td>${media}</td>
+
+<td>${ad.title}</td>
+
+<td>${ad.description}</td>
+
+<td>${ad.price || ""}</td>
+
+<td>
+${ad.advertisement_type}
+</td>
+
+<td>
+${ad.start_datetime || "—"}
+</td>
+
+<td>
+${ad.end_datetime || "—"}
+</td>
+
+<td>
+${ad.status}
+</td>
+
+<td>
+
+<button
+    class="delete"
+    onclick="deleteAdvertisement(${ad.id})"
+>
+
+Delete
+
+</button>
+
+</td>
+
+</tr>
+
+`;
+
+});
+
+
+document
+.getElementById("advertisementTable")
+.innerHTML = table;
+
+})
+
+.catch(error => {
+
+console.error(
+    "Advertisement loading error:",
+    error
+);
+
+});
+
+}
+
+
+
+// =====================================================
+// DELETE ADVERTISEMENT
+// =====================================================
+
+function deleteAdvertisement(id){
+
+if(!confirm(
+    "Are you sure you want to delete this advertisement?"
+)){
+
+return;
+
+}
+
+
+fetch(
+    "/advertisements/" + id,
+    {
+        method:"DELETE"
+    }
+)
+
+.then(response => response.json())
+
+.then(data => {
+
+if(data.success){
+
+    alert(
+        "Advertisement deleted."
+    );
+
+    loadAdvertisements();
+
+}
+
+else{
+
+    alert(
+        data.message ||
+        "Could not delete advertisement."
+    );
+
+}
+
+})
+
+.catch(error => {
+
+console.error(error);
+
+});
+
+}
+
+
+
+// =====================================================
+// LOAD ADVERTISEMENTS WHEN DASHBOARD OPENS
+// =====================================================
+
+loadAdvertisements();
+
+</script>
+
+</body>
+
+</html>
