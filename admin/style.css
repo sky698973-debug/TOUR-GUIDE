@@ -1,0 +1,575 @@
+/* ===================================
+   DARIUS DEEDEA TOUR GUIDE
+   MAIN STYLESHEET
+=================================== */
+
+/* RESET */
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html{
+    scroll-behavior:smooth;
+}
+
+body{
+    font-family:Arial, Helvetica, sans-serif;
+    background:#f5f5f5;
+    color:#333;
+    line-height:1.6;
+}
+
+/* CONTAINER */
+
+.container{
+    width:90%;
+    max-width:1200px;
+    margin:auto;
+}
+
+/* ==========================
+   NAVIGATION
+========================== */
+
+.navbar{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:60px;
+    background:#00695c;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+     padding:5px 10px;
+    z-index:1000;
+}
+
+.logo{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.logo img{
+    width:45px;
+    height:45px;
+    border-radius:50%;
+}
+
+.logo-text h2{
+    color:white;
+    font-size:22px;
+}
+
+.logo-text p{
+    color:#FFD700;
+    font-size:11px;
+    letter-spacing:1.5px;
+}
+
+.nav-links{
+    display:flex;
+    list-style:none;
+    gap:25px;
+}
+
+.nav-links a{
+    color:white;
+    text-decoration:none;
+    font-weight:bold;
+    transition:.3s;
+}
+
+.nav-links a:hover{
+    color:#FFD700;
+}
+/* ==========================
+   HERO SECTION
+========================== */
+
+.hero{
+    position:relative;
+    width:100%;
+    height:calc(100vh - 60px);
+    margin-top:60px;
+    overflow:hidden;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+.slider{
+    position:absolute;
+    width:100%;
+    height:100%;
+    top:0;
+    left:0;
+}
+
+.slide{
+    position:absolute;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    opacity:0;
+    transition:opacity 1.5s ease;
+}
+
+.slide.active{
+    opacity:1;
+}
+
+.hero::before{
+    content:"";
+    position:absolute;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,.45);
+    z-index:1;
+}
+
+.hero-content{
+    position:relative;
+    z-index:2;
+    text-align:center;
+    color:white;
+    max-width:800px;
+    padding:20px;
+}
+
+.hero-content h1{
+    font-size:60px;
+    margin-bottom:20px;
+}
+
+.hero-content p{
+    font-size:24px;
+    margin-bottom:35px;
+}
+
+/* ==========================
+   BUTTON
+========================== */
+
+.btn{
+    display:inline-block;
+    background:#ff9800;
+    color:white;
+    padding:14px 35px;
+    border-radius:30px;
+    text-decoration:none;
+    font-weight:bold;
+    transition:.3s;
+}
+
+.btn:hover{
+    background:#e68900;
+}
+
+/* ==========================
+   SLIDER BUTTONS
+========================== */
+
+.prev,
+.next{
+    position:absolute;
+    top:50%;
+    transform:translateY(-50%);
+    background:rgba(0,0,0,.5);
+    color:white;
+    border:none;
+    padding:15px;
+    cursor:pointer;
+    border-radius:50%;
+    font-size:24px;
+    z-index:3;
+}
+
+.prev{
+    left:20px;
+}
+
+.next{
+    right:20px;
+}
+
+.prev:hover,
+.next:hover{
+    background:#ff9800;
+}
+
+/* ==========================
+   SEARCH SECTION
+========================== */
+
+.search-tour{
+    background:white;
+    padding:70px 20px;
+}
+
+.search-box{
+    max-width:1100px;
+    margin:auto;
+    background:white;
+    border-radius:15px;
+    padding:30px;
+    box-shadow:0 8px 20px rgba(0,0,0,.15);
+}
+
+.search-box h2{
+    text-align:center;
+    color:#00695c;
+    margin-bottom:25px;
+}
+
+.search-box form{
+    display:flex;
+    flex-wrap:wrap;
+    gap:15px;
+    justify-content:center;
+}
+
+.search-box input,
+.search-box select{
+    flex:1;
+    min-width:220px;
+    padding:15px;
+    border:1px solid #ccc;
+    border-radius:8px;
+    font-size:16px;
+}
+
+.search-box button{
+    background:#ff9800;
+    color:white;
+    border:none;
+    padding:15px 35px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:16px;
+}
+
+.search-box button:hover{
+    background:#e68900;
+}
+/* ==========================
+   GENERAL SECTIONS
+========================== */
+
+section{
+    padding:80px 0;
+}
+
+section h2{
+    text-align:center;
+    color:#00695c;
+    font-size:40px;
+    margin-bottom:20px;
+}
+
+section p{
+    text-align:center;
+    font-size:18px;
+    margin-bottom:30px;
+    line-height:1.8;
+}
+
+/* ==========================
+   FEATURED TOURS
+========================== */
+
+.featured-tours{
+    background:#f8f9fa;
+}
+
+.cards{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+    gap:30px;
+    margin-top:30px;
+}
+
+.card{
+    background:#fff;
+    border-radius:15px;
+    overflow:hidden;
+    box-shadow:0 8px 20px rgba(0,0,0,.15);
+    transition:.3s;
+    text-align:center;
+}
+
+.card:hover{
+    transform:translateY(-8px);
+}
+
+.card img{
+    width:100%;
+    aspect-ratio:1 / 1;
+    height:auto;
+    object-fit:contain;
+    display:block;
+    background:#fff;
+    padding:5px;
+}
+.square-image{
+    position:relative;
+    width:100%;
+    aspect-ratio:1 / 1;
+    overflow:hidden;
+    background:#fff;
+}
+
+.square-image .image-bg{
+    position:absolute;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    filter:blur(15px);
+    transform:scale(1.15);
+    opacity:.6;
+}
+
+.square-image .image-main{
+    position:absolute;
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    z-index:2;
+}
+.card h3{
+    color:#00695c;
+    margin:20px 0 10px;
+}
+
+.card p{
+    padding:0 20px;
+}
+
+.card h4{
+    color:#ff9800;
+    margin:15px 0;
+    font-size:22px;
+}
+
+.card .btn{
+    margin:20px;
+}
+
+/* ==========================
+   ABOUT US
+========================== */
+
+.about{
+    background:white;
+}
+
+.about .container{
+    max-width:900px;
+    text-align:center;
+}
+
+/* ==========================
+   WHY CHOOSE US
+========================== */
+
+.why{
+    background:#eef8f7;
+}
+
+/* ==========================
+   DESTINATIONS
+========================== */
+
+.destinations{
+    background:white;
+}
+
+/* ==========================
+   MAKE EACH SECTION VERTICAL
+========================== */
+
+.featured-tours,
+.about,
+.why,
+.destinations,
+.advertisement,
+.gallery,
+.contact,
+.footer{
+    display:block;
+    width:100%;
+    clear:both;
+}
+
+
+/* =====================================
+   GALLERY
+===================================== */
+
+.gallery{
+    background:#f8f9fa;
+    padding:80px 20px;
+}
+
+.gallery-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+    gap:25px;
+}
+
+.gallery-grid img,
+.gallery-grid video{
+    width:100%;
+    aspect-ratio:1 / 1;
+    height:auto;
+    object-fit:contain;
+    border-radius:12px;
+    transition:.3s;
+    background:#fff;
+}
+.gallery-grid img:hover,
+.gallery-grid video:hover{
+    transform:scale(1.03);
+}
+
+/* =====================================
+   CONTACT
+===================================== */
+
+.contact{
+    background:white;
+    text-align:center;
+    padding:80px 20px;
+}
+
+.contact p{
+    margin:10px 0;
+}
+
+/* =====================================
+   FOOTER
+===================================== */
+
+.footer{
+    background:#004d40;
+    color:white;
+    padding:60px 20px 20px;
+}
+
+.footer-container{
+    max-width:1200px;
+    margin:auto;
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+    gap:30px;
+}
+
+.footer-section h3{
+    color:#FFD54F;
+    margin-bottom:20px;
+}
+
+.footer-section p{
+    margin:10px 0;
+}
+
+.footer-section a{
+    display:block;
+    color:white;
+    text-decoration:none;
+    margin:8px 0;
+}
+
+.footer-section a:hover{
+    color:#FFD54F;
+}
+
+.footer-bottom{
+    border-top:1px solid rgba(255,255,255,.2);
+    margin-top:30px;
+    padding-top:20px;
+    text-align:center;
+}
+
+/* =====================================
+   MOBILE
+===================================== */
+
+@media (max-width:768px){
+
+    .navbar{
+        flex-direction:row;
+        height:70px;
+        padding:5px 10px;
+        justify-content:space-between;
+    }
+
+    .logo{
+        flex-direction:row;
+        text-align:left;
+        gap:6px;
+    }
+
+    .logo img{
+        width:40px;
+        height:40px;
+    }
+
+    .logo-text h2{
+        font-size:16px;
+    }
+
+    .logo-text p{
+        font-size:8px;
+        letter-spacing:1px;
+    }
+
+    .nav-links{
+        display:flex;
+        flex-direction:row;
+        gap:10px;
+        margin-top:0;
+        text-align:center;
+        white-space:nowrap;
+    }
+
+    .nav-links a{
+        font-size:11px;
+    }
+
+    .hero-content h1{
+        font-size:38px;
+    }
+
+    .hero-content p{
+        font-size:18px;
+    }
+
+    .cards,
+    .advertisement-grid,
+    .gallery-grid,
+    .footer-container{
+        grid-template-columns:1fr;
+    }
+
+    .search-box form{
+        flex-direction:column;
+    }
+
+    .search-box input,
+    .search-box select,
+    .search-box button{
+        width:100%;
+    }
+
+    .prev,
+    .next{
+        display:none;
+    }
+}
