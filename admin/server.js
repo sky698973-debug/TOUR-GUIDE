@@ -1,3 +1,4 @@
+
 const express = require("express");
 const bodyParser = require("body-parser");
 const path = require("path");
@@ -11,97 +12,32 @@ const db = require("./database");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// =====================================================
-// SESSION CONFIGURATION
-// =====================================================
+const production = process.env.NODE_ENV === "production";
 
-app.use(
-    session({
-        secret: "darius-deedea-tour-secret-key",
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-            maxAge: 1000 * 60 * 60 * 24
-        }
-    })
-);
-
-// =====================================================
-// ADVERTISEMENT UPLOAD CONFIGURATION
-// =====================================================
-
-const uploadFolder = path.join(__dirname, "uploads");
-
-if (!fs.existsSync(uploadFolder)) {
-    fs.mkdirSync(uploadFolder);
+if (production && !process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET is required.");
 }
 
-const storage = multer.diskStorage({
+app.set("trust proxy", 1);
 
-    destination: function(req, file, cb) {
-
-        cb(null, uploadFolder);
-
-    },
-
-    filename: function(req, file, cb) {
-
-        const uniqueName =
-            Date.now() + "-" +
-            Math.round(Math.random() * 1E9) +
-            path.extname(file.originalname);
-
-        cb(null, uniqueName);
-
-    }
-
-});
-
-const upload = multer({
-
-    storage: storage,
-
-    limits: {
-        fileSize: 100 * 1024 * 1024
-    },
-
-    fileFilter: function(req, file, cb) {
-
-        const allowedTypes = [
-            "image/jpeg",
-            "image/png",
-            "image/webp",
-            "image/gif",
-            "video/mp4",
-            "video/webm",
-            "video/ogg"
-        ];
-
-        if (allowedTypes.includes(file.mimetype)) {
-
-            cb(null, true);
-
-        } else {
-
-            cb(
-                new Error(
-                    "Only images and videos are allowed."
-                )
-            );
-
-        }
-
-    }
-
-});
-
-// Read form data
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// =====================================================
-// USERS TABLE
-// =====================================================
+app.use(session({
+    name: "tourguide.sid",
+    secret: process.env.SESSION_SECRET ||
+        "local-development-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        secure: production,
+        sameSite: "lax",
+        maxAge: 24 * 60 * 60 * 1000
+    }
+}));
+
+// DATABASE: USERS TABLE
 
 db.run(`
     CREATE TABLE IF NOT EXISTS users (
@@ -111,19 +47,97 @@ db.run(`
         password TEXT NOT NULL
     )
 `, (err) => {
-
     if (err) {
-        console.log("Users table error:", err.message);
+        console.error("Users table error:", err.message);
     } else {
         console.log("Users table ready");
     }
-
 });
+
+// UPLOAD CONFIGURATION
+
+const uploadFolder = process.env.UPLOADS_DIR ||
+    path.join(__dirname, "uploads");
+
+fs.mkdirSync(uploadFolder, { recursive: true });
+
+const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "video/mp4",
+    "video/webm",
+    "video/ogg"
+];
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadFolder);
+    },
+
+    filename: (req, file, cb) => {
+        const uniqueName =
+            Date.now() + "-" +
+            Math.round(Math.random() * 1e9) +
+            path.extname(file.originalname).toLowerCase();
+
+        cb(null, uniqueName);
+    }
+});
+
+const upload = multer({
+    storage: storage,
+
+    limits: {
+        fileSize: 100 * 1024 * 1024
+    },
+
+    fileFilter: (req, file, cb) => {
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error("Only images and videos are allowed."));
+        }
+    }
+});
+
+// AUTHENTICATION HELPERS
+
+function requireAdmin(req, res, next) {
+    if (!req.session.admin) {
+        return res.redirect("/admin-login.html");
+    }
+    next();
+}
+
+function requireSuperAdmin(req, res, next) {
+    if (
+        !req.session.admin ||
+        req.session.admin.role !== "superadmin"
+    ) {
+        return res.status(403).json({
+            success: false,
+            message: "Super Admin access required."
+        });
+    }
+    next();
+}
+
+function regenerateSession(req) {
+    return new Promise((resolve, reject) => {
+        req.session.regenerate(err => {
+            if (err) reject(err);
+            else resolve();
+        });
+    });
+}
+
 // =====================================================
 // USER REGISTRATION
 // =====================================================
 
-app.post("/register", async (req, res) => {
+app.post("/register", (req, res) => {
 
     const {
         fullname,
@@ -132,122 +146,66 @@ app.post("/register", async (req, res) => {
         confirmPassword
     } = req.body;
 
-    // Check all fields
     if (!fullname || !email || !password || !confirmPassword) {
-
-        return res.send(`
-            <h2>All fields are required.</h2>
-
-            <a href="/register.html">
-                Go Back
-            </a>
-        `);
-
+        return res.status(400).send("All fields are required.");
     }
 
-    // Check passwords
     if (password !== confirmPassword) {
-
-        return res.send(`
-            <h2>Passwords do not match.</h2>
-
-            <a href="/register.html">
-                Go Back
-            </a>
-        `);
-
+        return res.status(400).send("Passwords do not match.");
     }
 
-    // Check password length
     if (password.length < 6) {
-
-        return res.send(`
-            <h2>Password must be at least 6 characters.</h2>
-
-            <a href="/register.html">
-                Go Back
-            </a>
-        `);
-
+        return res.status(400).send(
+            "Password must be at least 6 characters."
+        );
     }
 
-    // Check if email already exists
+    const normalizedEmail = email.trim().toLowerCase();
+
     db.get(
-        `SELECT id FROM users WHERE email = ?`,
-        [email],
+        "SELECT id FROM users WHERE email = ?",
+        [normalizedEmail],
         async (err, user) => {
 
             if (err) {
-
-                console.log(err);
-
-                return res.send(`
-                    <h2>Registration failed.</h2>
-
-                    <a href="/register.html">
-                        Try Again
-                    </a>
-                `);
-
+                console.error(err);
+                return res.status(500).send("Registration failed.");
             }
 
-            // Email already registered
             if (user) {
-
-                return res.send(`
-                    <h2>Email already registered.</h2>
-
-                    <p>Please login instead.</p>
-
-                    <a href="/login.html">
-                        Login
-                    </a>
-                `);
-
+                return res.status(409).send(
+                    'Email already registered. <a href="/login.html">Login</a>'
+                );
             }
 
-            // Hash password
-            const hashedPassword =
-                await bcrypt.hash(password, 10);
+            try {
+                const hashedPassword = await bcrypt.hash(password, 10);
 
-            // Save user
-            db.run(
-                `
-                INSERT INTO users
-                (fullname, email, password)
-                VALUES (?, ?, ?)
-                `,
-                [
-                    fullname,
-                    email,
-                    hashedPassword
-                ],
-                function(err) {
+                db.run(
+                    `INSERT INTO users (fullname, email, password)
+                     VALUES (?, ?, ?)`,
+                    [fullname.trim(), normalizedEmail, hashedPassword],
+                    function(insertErr) {
 
-                    if (err) {
+                        if (insertErr) {
+                            console.error(insertErr);
+                            return res.status(500).send(
+                                "Registration failed."
+                            );
+                        }
 
-                        console.log(err);
-
-                        return res.send(`
-                            <h2>Registration failed.</h2>
-
-                            <a href="/register.html">
-                                Try Again
-                            </a>
-                        `);
-
+                        res.redirect("/login.html");
                     }
+                );
 
-                    // Registration successful
-                    res.redirect("/login.html");
-
-                }
-            );
-
+            } catch (error) {
+                console.error(error);
+                res.status(500).send("Registration failed.");
+            }
         }
     );
-
 });
+
 // =====================================================
 // USER LOGIN
 // =====================================================
@@ -257,76 +215,55 @@ app.post("/login", (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-
-        return res.send(`
-            <h2>Email and password are required.</h2>
-
-            <a href="/login.html">
-                Go Back
-            </a>
-        `);
-
+        return res.status(400).send(
+            "Email and password are required."
+        );
     }
 
     db.get(
-        `SELECT * FROM users WHERE email = ?`,
-        [email],
+        "SELECT * FROM users WHERE email = ?",
+        [email.trim().toLowerCase()],
         async (err, user) => {
 
             if (err) {
-
-                console.log(err);
-
-                return res.send(`
-                    <h2>Login failed.</h2>
-
-                    <a href="/login.html">
-                        Try Again
-                    </a>
-                `);
-
+                console.error(err);
+                return res.status(500).send("Login failed.");
             }
 
             if (!user) {
-
-                return res.send(`
-                    <h2>Invalid email or password.</h2>
-
-                    <a href="/login.html">
-                        Try Again
-                    </a>
-                `);
-
+                return res.status(401).send(
+                    "Invalid email or password."
+                );
             }
 
-            const passwordMatch = await bcrypt.compare(
-                password,
-                user.password
-            );
+            try {
+                const passwordMatch = await bcrypt.compare(
+                    password,
+                    user.password
+                );
 
-            if (!passwordMatch) {
+                if (!passwordMatch) {
+                    return res.status(401).send(
+                        "Invalid email or password."
+                    );
+                }
 
-                return res.send(`
-                    <h2>Invalid email or password.</h2>
+                await regenerateSession(req);
 
-                    <a href="/login.html">
-                        Try Again
-                    </a>
-                `);
+                req.session.user = {
+                    id: user.id,
+                    fullname: user.fullname,
+                    email: user.email
+                };
 
+                res.redirect("/booking.html");
+
+            } catch (error) {
+                console.error(error);
+                res.status(500).send("Login failed.");
             }
-
-            req.session.user = {
-                id: user.id,
-                fullname: user.fullname,
-                email: user.email
-            };
-
-            res.redirect("/booking.html");
-
         }
     );
-
 });
 
 // =====================================================
@@ -335,68 +272,124 @@ app.post("/login", (req, res) => {
 
 app.get("/logout", (req, res) => {
 
-    req.session.destroy((err) => {
+    req.session.destroy(err => {
 
         if (err) {
-
-            console.log("Logout error:", err);
-
-            return res.send("Logout failed.");
-
+            return res.status(500).send("Logout failed.");
         }
 
+        res.clearCookie("tourguide.sid");
         res.redirect("/");
 
     });
-
 });
+
+// =====================================================
+// ADMIN LOGIN
+// =====================================================
+
+app.post("/admin-login", async (req, res) => {
+
+    const { username, password } = req.body;
+
+    let role = null;
+
+    if (
+        username === process.env.ADMIN_USERNAME &&
+        password === process.env.ADMIN_PASSWORD
+    ) {
+        role = "admin";
+
+    } else if (
+        username === process.env.SUPERADMIN_USERNAME &&
+        password === process.env.SUPERADMIN_PASSWORD
+    ) {
+        role = "superadmin";
+    }
+
+    if (!role) {
+        return res.status(401).send(
+            'Wrong username or password. <a href="/admin-login.html">Try again</a>'
+        );
+    }
+
+    try {
+        await regenerateSession(req);
+
+        req.session.admin = {
+            username,
+            role
+        };
+
+        res.redirect("/dashboard.html");
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).send("Admin login failed.");
+    }
+});
+
 // =====================================================
 // ADMIN LOGOUT
 // =====================================================
 
 app.get("/admin-logout", (req, res) => {
 
-    // Remove admin session
-    delete req.session.admin;
+    req.session.destroy(err => {
 
-    res.redirect("/admin-login.html");
+        if (err) {
+            return res.status(500).send("Logout failed.");
+        }
+
+        res.clearCookie("tourguide.sid");
+        res.redirect("/admin-login.html");
+
+    });
+});
+
+// =====================================================
+// ADMIN DASHBOARD PROTECTION
+// =====================================================
+
+app.get("/dashboard.html", requireAdmin, (req, res) => {
+
+    res.sendFile(path.join(__dirname, "dashboard.html"));
 
 });
 
-// Serve static files
+app.get("/admin/dashboard.html", requireAdmin, (req, res) => {
+
+    res.redirect("/dashboard.html");
+
+});
+
 // =====================================================
-// PROTECT ADMIN DASHBOARD
+// CURRENT ADMIN
 // =====================================================
 
-app.get("/admin/dashboard.html", (req, res, next) => {
+app.get("/current-admin", (req, res) => {
 
-    // No admin logged in
     if (!req.session.admin) {
-
-        return res.redirect("/admin-login.html");
-
+        return res.status(401).json({
+            loggedIn: false
+        });
     }
 
-    // Admin is logged in
-    next();
+    res.json({
+        loggedIn: true,
+        username: req.session.admin.username,
+        role: req.session.admin.role
+    });
 
 });
-app.use(express.static(path.join(__dirname)));
-app.use(
-    "/uploads",
-    express.static(path.join(__dirname, "uploads"))
-);
 
-// Home page
-app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "index.html"));
-});
+// =====================================================
+// BOOKINGS - ADMIN ONLY
+// =====================================================
 
-// Booking form
 app.post("/book", (req, res) => {
 
     const {
-
         fullname,
         email,
         phone,
@@ -404,277 +397,189 @@ app.post("/book", (req, res) => {
         travelDate,
         guests,
         message
-
     } = req.body;
 
-    db.run(
+    if (
+        !fullname ||
+        !email ||
+        !phone ||
+        !destination ||
+        !travelDate ||
+        !guests
+    ) {
+        return res.status(400).send(
+            "Please complete all required fields."
+        );
+    }
 
+    db.run(
         `INSERT INTO bookings
-        (fullname,email,phone,destination,travelDate,guests,message)
-        VALUES (?,?,?,?,?,?,?)`,
+        (fullname, email, phone, destination, travelDate, guests, message)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
 
         [
-
             fullname,
             email,
             phone,
             destination,
             travelDate,
             guests,
-            message
-
+            message || ""
         ],
 
-        function(err){
+        function(err) {
 
-            if(err){
-
-                console.log(err);
-
-                return res.send("Booking Failed");
-
+            if (err) {
+                console.error(err);
+                return res.status(500).send("Booking failed.");
             }
 
             res.send(`
-
                 <h1>Booking Successful!</h1>
-
                 <h2>Booking Number: DDT-${this.lastID}</h2>
-
-                <p>Thank you ${fullname}.</p>
-
+                <p>Thank you ${escapeHtml(fullname)}.</p>
                 <a href="/">Return Home</a>
-
             `);
-
         }
-
     );
-
 });
-app.get("/bookings", (req, res) => {
 
-    db.all("SELECT * FROM bookings ORDER BY id DESC", [], (err, rows) => {
+// =====================================================
+// GET BOOKINGS
+// =====================================================
 
-        if(err){
+app.get("/bookings", requireAdmin, (req, res) => {
 
-            return res.status(500).json({error:err.message});
+    db.all(
+        "SELECT * FROM bookings ORDER BY id DESC",
+        [],
+        (err, rows) => {
 
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    error: "Could not retrieve bookings."
+                });
+            }
+
+            res.json(rows);
         }
-
-        res.json(rows);
-
-    });
-
+    );
 });
 
 // =====================================================
-// ADMIN LOGIN
+// GET ALL ADVERTISEMENTS
 // =====================================================
 
-app.post("/admin-login", (req, res) => {
+app.get("/advertisements", (req, res) => {
 
-    const { username, password } = req.body;
+    db.all(
+        "SELECT * FROM advertisements ORDER BY id DESC",
+        [],
+        (err, rows) => {
 
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    error: "Could not retrieve advertisements."
+                });
+            }
 
-    // =========================================
-    // ADMIN 1
-    // =========================================
-
-    if (
-        username === "Admin" &&
-        password === "12345"
-    ) {
-
-        req.session.admin = {
-            username: "Admin",
-            role: "admin"
-        };
-
-        return res.redirect("/admin/dashboard.html");
-
-    }
-
-
-    // =========================================
-    // ADMIN 2 - SUPER ADMIN
-    // =========================================
-
-    if (
-        username === "superadmin" &&
-        password === "12"
-    ) {
-
-        req.session.admin = {
-            username: "superadmin",
-            role: "superadmin"
-        };
-
-        return res.redirect("/admin/dashboard.html");
-
-    }
-
-
-    // =========================================
-    // WRONG LOGIN
-    // =========================================
-
-    res.send(`
-        <h2>Wrong Username or Password</h2>
-
-        <a href="/admin-login.html">
-            Try Again
-        </a>
-    `);
-
-});
-// =====================================================
-// GET CURRENT ADMIN
-// =====================================================
-
-app.get("/current-admin", (req, res) => {
-
-    if (!req.session.admin) {
-
-        return res.status(401).json({
-
-            loggedIn: false
-
-        });
-
-    }
-
-    res.json({
-
-        loggedIn: true,
-
-        username: req.session.admin.username,
-
-        role: req.session.admin.role
-
-    });
-
+            res.json(rows);
+        }
+    );
 });
 
 // =====================================================
-// ADVERTISEMENT MANAGEMENT
+// GET ACTIVE ADVERTISEMENTS
 // =====================================================
 
+app.get("/advertisements/active", (req, res) => {
 
-// CREATE ADVERTISEMENT
+    db.all(
+        `SELECT * FROM advertisements
+         WHERE status = 'published'
+         AND (
+             advertisement_type = 'permanent'
+             OR (
+                 advertisement_type = 'duration'
+                 AND start_datetime <= datetime('now')
+                 AND end_datetime >= datetime('now')
+             )
+         )
+         ORDER BY id DESC`,
+        [],
+        (err, rows) => {
+
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    error: "Could not retrieve advertisements."
+                });
+            }
+
+            res.json(rows);
+        }
+    );
+});
+
+// =====================================================
+// CREATE ADVERTISEMENT - SUPERADMIN ONLY
 // =====================================================
 
 app.post(
     "/advertisements",
+    requireSuperAdmin,
     upload.single("media"),
     (req, res) => {
 
-        // =====================================================
-        // ONLY SUPERADMIN CAN ADD ADVERTISEMENTS / EVENTS
-        // =====================================================
-
-        if (
-            !req.session.admin ||
-            req.session.admin.role !== "superadmin"
-        ) {
-
-            // Delete uploaded file if Admin 1 tried to upload
-            if (req.file) {
-
-                const uploadedFile =
-                    path.join(
-                        __dirname,
-                        "uploads",
-                        req.file.filename
-                    );
-
-                if (fs.existsSync(uploadedFile)) {
-
-                    fs.unlinkSync(uploadedFile);
-
-                }
-
-            }
-
-            return res.status(403).json({
-
-                success: false,
-
-                message:
-                    "Access denied. Only Super Admin can add advertisements or events."
-
-            });
-
-        }
-
-
         const {
-
             title,
             description,
             price,
             advertisement_type,
             start_datetime,
             end_datetime
-
         } = req.body;
 
+        if (!title || !description || !req.file) {
 
-        if (!title || !description) {
-
-            return res.status(400).json({
-
-                success:false,
-
-                message:"Title and description are required."
-
-            });
-
-        }
-
-
-        if (!req.file) {
+            if (req.file) {
+                fs.unlink(req.file.path, () => {});
+            }
 
             return res.status(400).json({
-
-                success:false,
-
-                message:"Please upload a photo or video."
-
+                success: false,
+                message: "Title, description and media are required."
             });
-
         }
 
+        if (!["permanent", "duration"].includes(advertisement_type)) {
 
-        // Check duration advertisement
+            fs.unlink(req.file.path, () => {});
+
+            return res.status(400).json({
+                success: false,
+                message: "Invalid advertisement type."
+            });
+        }
 
         if (
             advertisement_type === "duration" &&
             (!start_datetime || !end_datetime)
         ) {
 
+            fs.unlink(req.file.path, () => {});
+
             return res.status(400).json({
-
-                success:false,
-
-                message:
-                "Start and end date/time are required for duration advertisements."
-
+                success: false,
+                message: "Start and end dates are required."
             });
-
         }
 
-
-        const mediaPath =
-            "/uploads/" + req.file.filename;
-
-
-        const mediaType =
-            req.file.mimetype;
-
+        const mediaPath = "/uploads/" + req.file.filename;
 
         db.run(
-
             `INSERT INTO advertisements
             (
                 title,
@@ -687,270 +592,609 @@ app.post(
                 end_datetime,
                 status
             )
-            VALUES (?,?,?,?,?,?,?,?,?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 
             [
-
                 title,
                 description,
                 price || "",
                 mediaPath,
-                mediaType,
+                req.file.mimetype,
                 advertisement_type,
                 advertisement_type === "permanent"
                     ? null
                     : start_datetime,
-
                 advertisement_type === "permanent"
                     ? null
                     : end_datetime,
-
                 "published"
-
             ],
 
             function(err) {
 
-                if(err) {
-
-                    console.log(err);
+                if (err) {
+                    console.error(err);
+                    fs.unlink(req.file.path, () => {});
 
                     return res.status(500).json({
-
-                        success:false,
-
-                        message:
-                        "Failed to save advertisement."
-
+                        success: false,
+                        message: "Failed to save advertisement."
                     });
-
                 }
-
 
                 res.json({
-
-                    success:true,
-
-                    message:
-                    "Advertisement published successfully.",
-
-                    id:this.lastID
-
+                    success: true,
+                    message: "Advertisement published successfully.",
+                    id: this.lastID
                 });
-
             }
-
         );
-
     }
 );
 
-
-
-// GET ALL ADVERTISEMENTS
 // =====================================================
-
-app.get(
-    "/advertisements",
-    (req, res) => {
-
-        db.all(
-
-            `SELECT *
-             FROM advertisements
-             ORDER BY id DESC`,
-
-            [],
-
-            (err, rows) => {
-
-                if(err) {
-
-                    console.log(err);
-
-                    return res.status(500).json({
-
-                        error:err.message
-
-                    });
-
-                }
-
-
-                res.json(rows);
-
-            }
-
-        );
-
-    }
-);
-
-
-
-// GET ACTIVE ADVERTISEMENTS
-// =====================================================
-
-app.get(
-    "/advertisements/active",
-    (req, res) => {
-
-        db.all(
-
-            `SELECT *
-             FROM advertisements
-             WHERE status = 'published'
-             AND
-             (
-                 advertisement_type = 'permanent'
-
-                 OR
-
-                 (
-                     advertisement_type = 'duration'
-                     AND start_datetime <= datetime('now')
-                     AND end_datetime >= datetime('now')
-                 )
-             )
-             ORDER BY id DESC`,
-
-            [],
-
-            (err, rows) => {
-
-                if(err) {
-
-                    console.log(err);
-
-                    return res.status(500).json({
-
-                        error:err.message
-
-                    });
-
-                }
-
-
-                res.json(rows);
-
-            }
-
-        );
-
-    }
-);
-
-
-
-// DELETE ADVERTISEMENT
+// DELETE ADVERTISEMENT - SUPERADMIN ONLY
 // =====================================================
 
 app.delete(
     "/advertisements/:id",
+    requireSuperAdmin,
     (req, res) => {
 
-        const id = req.params.id;
+        const id = Number(req.params.id);
 
+        if (!Number.isInteger(id) || id <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid advertisement ID."
+            });
+        }
 
         db.get(
-
-            `SELECT media
-             FROM advertisements
-             WHERE id = ?`,
-
+            "SELECT media FROM advertisements WHERE id = ?",
             [id],
-
             (err, ad) => {
 
-                if(err) {
-
+                if (err) {
+                    console.error(err);
                     return res.status(500).json({
-
-                        success:false,
-
-                        message:err.message
-
+                        success: false,
+                        message: "Database error."
                     });
-
                 }
 
+                if (!ad) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Advertisement not found."
+                    });
+                }
 
                 db.run(
-
-                    `DELETE FROM advertisements
-                     WHERE id = ?`,
-
+                    "DELETE FROM advertisements WHERE id = ?",
                     [id],
+                    function(deleteErr) {
 
-                    function(err) {
-
-                        if(err) {
-
+                        if (deleteErr) {
+                            console.error(deleteErr);
                             return res.status(500).json({
-
-                                success:false,
-
-                                message:err.message
-
+                                success: false,
+                                message: "Could not delete advertisement."
                             });
-
                         }
 
+                        if (ad.media) {
+                            const filename = path.basename(ad.media);
+                            const filePath = path.join(
+                                uploadFolder,
+                                filename
+                            );
 
-                        if(this.changes === 0) {
-
-                            return res.status(404).json({
-
-                                success:false,
-
-                                message:
-                                "Advertisement not found."
-
+                            fs.unlink(filePath, fileErr => {
+                                if (
+                                    fileErr &&
+                                    fileErr.code !== "ENOENT"
+                                ) {
+                                    console.error(fileErr);
+                                }
                             });
-
                         }
-
-
-                        // Delete uploaded file
-
-                        if(ad && ad.media) {
-
-                            const filePath =
-                                path.join(
-                                    __dirname,
-                                    ad.media
-                                );
-
-
-                            if(fs.existsSync(filePath)) {
-
-                                fs.unlinkSync(filePath);
-
-                            }
-
-                        }
-
 
                         res.json({
-
-                            success:true,
-
-                            message:
-                            "Advertisement deleted."
-
+                            success: true,
+                            message: "Advertisement deleted."
                         });
-
                     }
-
                 );
-
             }
-
         );
-
     }
 );
 
-app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+// =====================================================
+// SERVE UPLOADED MEDIA
+// =====================================================
+
+app.use("/uploads", express.static(uploadFolder));
+
+// =====================================================
+// PROTECT PRIVATE FILES
+// =====================================================
+
+app.use((req, res, next) => {
+
+    const blocked = [
+        /^\/server\.js$/i,
+        /^\/database\.js$/i,
+        /^\/package(?:-lock)?\.json$/i,
+        /^\/\.env/i
+    ];
+
+    if (blocked.some(pattern => pattern.test(req.path))) {
+        return res.sendStatus(404);
+    }
+
+    next();
+});
+
+// =====================================================
+// SERVE WEBSITE FILES
+// =====================================================
+
+app.use(express.static(__dirname, {
+    index: false,
+    dotfiles: "deny"
+}));
+
+// =====================================================
+// HOMEPAGE
+// =====================================================
+
+app.get("/", (req, res) => {
+
+    res.sendFile(path.join(__dirname, "index.html"));
+
+});
+
+// =====================================================
+// ERROR HANDLING
+// =====================================================
+
+app.use((err, req, res, next) => {
+
+    console.error("Server error:", err);
+
+    if (
+        err instanceof multer.MulterError ||
+        err.message === "Only images and videos are allowed."
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: err.message
+        });
+    }
+
+    res.status(500).send(
+        "An unexpected server error occurred."
+    );
+});
+
+// =====================================================
+// START SERVER FOR RENDER
+// =====================================================
+
+app.listen(PORT, "0.0.0.0", () => {
+
+    console.log(
+        `Tour Guide server running on port ${PORT}`
+    );
+
+});
+
+// =====================================================
+// BOOKINGS - ADMIN ONLY
+// =====================================================
+
+app.post("/book", (req, res) => {
+
+    const {
+        fullname,
+        email,
+        phone,
+        destination,
+        travelDate,
+        guests,
+        message
+    } = req.body;
+
+    if (
+        !fullname ||
+        !email ||
+        !phone ||
+        !destination ||
+        !travelDate ||
+        !guests
+    ) {
+        return res.status(400).send(
+            "Please complete all required fields."
+        );
+    }
+
+    db.run(
+        `INSERT INTO bookings
+        (fullname, email, phone, destination, travelDate, guests, message)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+
+        [
+            fullname,
+            email,
+            phone,
+            destination,
+            travelDate,
+            guests,
+            message || ""
+        ],
+
+        function(err) {
+
+            if (err) {
+                console.error(err);
+                return res.status(500).send("Booking failed.");
+            }
+
+            res.send(`
+                <h1>Booking Successful!</h1>
+                <h2>Booking Number: DDT-${this.lastID}</h2>
+                <p>Thank you ${escapeHtml(fullname)}.</p>
+                <a href="/">Return Home</a>
+            `);
+        }
+    );
+});
+
+// =====================================================
+// GET BOOKINGS
+// =====================================================
+
+app.get("/bookings", requireAdmin, (req, res) => {
+
+    db.all(
+        "SELECT * FROM bookings ORDER BY id DESC",
+        [],
+        (err, rows) => {
+
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    error: "Could not retrieve bookings."
+                });
+            }
+
+            res.json(rows);
+        }
+    );
+});
+
+// =====================================================
+// GET ALL ADVERTISEMENTS
+// =====================================================
+
+app.get("/advertisements", (req, res) => {
+
+    db.all(
+        "SELECT * FROM advertisements ORDER BY id DESC",
+        [],
+        (err, rows) => {
+
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    error: "Could not retrieve advertisements."
+                });
+            }
+
+            res.json(rows);
+        }
+    );
+});
+
+// =====================================================
+// GET ACTIVE ADVERTISEMENTS
+// =====================================================
+
+app.get("/advertisements/active", (req, res) => {
+
+    db.all(
+        `SELECT * FROM advertisements
+         WHERE status = 'published'
+         AND (
+             advertisement_type = 'permanent'
+             OR (
+                 advertisement_type = 'duration'
+                 AND start_datetime <= datetime('now')
+                 AND end_datetime >= datetime('now')
+             )
+         )
+         ORDER BY id DESC`,
+        [],
+        (err, rows) => {
+
+            if (err) {
+                console.error(err);
+                return res.status(500).json({
+                    error: "Could not retrieve advertisements."
+                });
+            }
+
+            res.json(rows);
+        }
+    );
+});
+
+// =====================================================
+// CREATE ADVERTISEMENT - SUPERADMIN ONLY
+// =====================================================
+
+app.post(
+    "/advertisements",
+    requireSuperAdmin,
+    upload.single("media"),
+    (req, res) => {
+
+        const {
+            title,
+            description,
+            price,
+            advertisement_type,
+            start_datetime,
+            end_datetime
+        } = req.body;
+
+        if (!title || !description || !req.file) {
+
+            if (req.file) {
+                fs.unlink(req.file.path, () => {});
+            }
+
+            return res.status(400).json({
+                success: false,
+                message: "Title, description and media are required."
+            });
+        }
+
+        if (!["permanent", "duration"].includes(advertisement_type)) {
+
+            fs.unlink(req.file.path, () => {});
+
+            return res.status(400).json({
+                success: false,
+                message: "Invalid advertisement type."
+            });
+        }
+
+        if (
+            advertisement_type === "duration" &&
+            (!start_datetime || !end_datetime)
+        ) {
+
+            fs.unlink(req.file.path, () => {});
+
+            return res.status(400).json({
+                success: false,
+                message: "Start and end dates are required."
+            });
+        }
+
+        const mediaPath = "/uploads/" + req.file.filename;
+
+        db.run(
+            `INSERT INTO advertisements
+            (
+                title,
+                description,
+                price,
+                media,
+                media_type,
+                advertisement_type,
+                start_datetime,
+                end_datetime,
+                status
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+
+            [
+                title,
+                description,
+                price || "",
+                mediaPath,
+                req.file.mimetype,
+                advertisement_type,
+                advertisement_type === "permanent"
+                    ? null
+                    : start_datetime,
+                advertisement_type === "permanent"
+                    ? null
+                    : end_datetime,
+                "published"
+            ],
+
+            function(err) {
+
+                if (err) {
+                    console.error(err);
+                    fs.unlink(req.file.path, () => {});
+
+                    return res.status(500).json({
+                        success: false,
+                        message: "Failed to save advertisement."
+                    });
+                }
+
+                res.json({
+                    success: true,
+                    message: "Advertisement published successfully.",
+                    id: this.lastID
+                });
+            }
+        );
+    }
+);
+
+// =====================================================
+// DELETE ADVERTISEMENT - SUPERADMIN ONLY
+// =====================================================
+
+app.delete(
+    "/advertisements/:id",
+    requireSuperAdmin,
+    (req, res) => {
+
+        const id = Number(req.params.id);
+
+        if (!Number.isInteger(id) || id <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid advertisement ID."
+            });
+        }
+
+        db.get(
+            "SELECT media FROM advertisements WHERE id = ?",
+            [id],
+            (err, ad) => {
+
+                if (err) {
+                    console.error(err);
+                    return res.status(500).json({
+                        success: false,
+                        message: "Database error."
+                    });
+                }
+
+                if (!ad) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Advertisement not found."
+                    });
+                }
+
+                db.run(
+                    "DELETE FROM advertisements WHERE id = ?",
+                    [id],
+                    function(deleteErr) {
+
+                        if (deleteErr) {
+                            console.error(deleteErr);
+                            return res.status(500).json({
+                                success: false,
+                                message: "Could not delete advertisement."
+                            });
+                        }
+
+                        if (ad.media) {
+                            const filename = path.basename(ad.media);
+                            const filePath = path.join(
+                                uploadFolder,
+                                filename
+                            );
+
+                            fs.unlink(filePath, fileErr => {
+                                if (
+                                    fileErr &&
+                                    fileErr.code !== "ENOENT"
+                                ) {
+                                    console.error(fileErr);
+                                }
+                            });
+                        }
+
+                        res.json({
+                            success: true,
+                            message: "Advertisement deleted."
+                        });
+                    }
+                );
+            }
+        );
+    }
+);
+
+// =====================================================
+// SERVE UPLOADED MEDIA
+// =====================================================
+
+app.use("/uploads", express.static(uploadFolder));
+
+// =====================================================
+// PROTECT PRIVATE FILES
+// =====================================================
+
+app.use((req, res, next) => {
+
+    const blocked = [
+        /^\/server\.js$/i,
+        /^\/database\.js$/i,
+        /^\/package(?:-lock)?\.json$/i,
+        /^\/\.env/i
+    ];
+
+    if (blocked.some(pattern => pattern.test(req.path))) {
+        return res.sendStatus(404);
+    }
+
+    next();
+});
+
+// =====================================================
+// SERVE WEBSITE FILES
+// =====================================================
+
+app.use(express.static(__dirname, {
+    index: false,
+    dotfiles: "deny"
+}));
+
+// =====================================================
+// HOMEPAGE
+// =====================================================
+
+app.get("/", (req, res) => {
+
+    res.sendFile(path.join(__dirname, "index.html"));
+
+});
+
+// =====================================================
+// ERROR HANDLING
+// =====================================================
+
+app.use((err, req, res, next) => {
+
+    console.error("Server error:", err);
+
+    if (
+        err instanceof multer.MulterError ||
+        err.message === "Only images and videos are allowed."
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: err.message
+        });
+    }
+
+    res.status(500).send(
+        "An unexpected server error occurred."
+    );
+});
+
+// =====================================================
+// START SERVER FOR RENDER
+// =====================================================
+
+app.listen(PORT, "0.0.0.0", () => {
+
+    console.log(
+        `Tour Guide server running on port ${PORT}`
+    );
+
 });
